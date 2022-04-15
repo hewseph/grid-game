@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import logo from './logo.svg'
-import './App.css'
 import styled from 'styled-components'
 
 enum Direction {
-  Still,
   ArrowUp,
   ArrowLeft,
   ArrowDown,
@@ -26,13 +23,15 @@ const getNextPosition = (direction: Direction, x: number, y: number): [number, n
   }
 }
 
+const int = (num: number) => num <= 0 ? 1 : num
+
 let intervalStarted = false;
 
 function App() {
-  const [_, rerender] = useState({})
-  const direction = useRef(Direction.Still);
+  const [[x, y], setPosition] = useState([1, 1])
+  const direction = useRef([]);
   const position = useRef([1, 1])
-  const [x, y] = position.current
+  position.current = [x, y]
   const [attacking, setAttack] = useState(false)
 
   useEffect(() => {
@@ -40,22 +39,24 @@ function App() {
       intervalStarted = true
       document.onkeydown = (e) => {
         if (Direction[e.key]) {
-          direction.current = Direction[e.key]
+          direction.current = [...direction.current, Direction[e.key]]
         }
-        if (e.key == " ") {
+        if (e.key == " " || e.key == "f") {
           setAttack(true);
           setTimeout(() => setAttack(false), 150)
         }
       };
       document.onkeyup = (e) => {
         if (Direction[e.key]) {
-          direction.current = Direction.Still
+          direction.current = direction.current.filter(d => d != Direction[e.key]);
         }
       }
       setInterval(() => {
-        if (direction.current !== Direction.Still) {
-          position.current = (getNextPosition(direction.current, position.current[0], position.current[1]))
-          rerender({})
+        if (direction.current.length) {
+          setPosition(getNextPosition(
+            direction.current[direction.current.length - 1],
+            position.current[0],
+            position.current[1]))
         }
       }, 17)
     }
@@ -71,8 +72,8 @@ function App() {
 }
 
 const Token = styled.div(({ x, y, attacking }: { x: number, y: number, attacking: boolean }) => ({
-  gridColumn: `${attacking ? x - 2 : x} / span ${attacking ? 14 : 10}`,
-  gridRow: `${attacking ? y - 2 : y} / span ${attacking ? 14 : 10}`,
+  gridColumn: `${attacking ? int(x - 2) : x} / span ${attacking ? 14 : 10}`,
+  gridRow: `${attacking ? int(y - 2) : y} / span ${attacking ? 14 : 10}`,
   backgroundColor: attacking ? "red" : "blue",
 }));
 
@@ -92,7 +93,8 @@ const Board = styled.div({
   width: "99vh",
   height: "99vh",
   transition: "200ms ease-in",
-  border: "1px solid black"
+  border: "1px solid black",
+  backgroundColor: "lightgray"
 })
 
 export default App
