@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
-
+// @ts-nocheck
 type Position = [number, number]
 
 enum Direction {
@@ -85,7 +85,7 @@ const getNextPosition = (direction: Direction, x: number, y: number, speed: numb
 
 const int = (num: number) => num <= 0 ? 1 : num
 
-let intervalId
+let intervalId: number
 let intervalStarted = false;
 
 function App() {
@@ -94,8 +94,8 @@ function App() {
     bullets: []
   })
   const [x, y] = state.position
-  const direction = useRef([]);
-  const position = useRef([250, 250])
+  const direction = useRef<Direction[]>([]);
+  const position = useRef<[number, number]>([250, 250])
   const bullets = useRef<IBullet[]>([])
   bullets.current = state.bullets
   position.current = [x, y]
@@ -106,8 +106,8 @@ function App() {
     if (!intervalStarted) {
       intervalStarted = true
       document.onkeydown = ({ key }: { key: string }) => {
-        if (Direction[key]) {
-          direction.current = [...direction.current, Direction[key]]
+        if (Direction[(key as keyof typeof Direction)]) {
+          direction.current = [...direction.current, Direction[(key as keyof typeof Direction)]]
         }
         if (key == " " || key == "f") {
           setAttack(true);
@@ -115,8 +115,8 @@ function App() {
         }
       };
       document.onkeyup = ({ key }: { key: string }) => {
-        if (Direction[key]) {
-          direction.current = direction.current.filter(d => d != Direction[key]);
+        if (Direction[(key as keyof typeof Direction)]) {
+          direction.current = direction.current.filter(d => d != Direction[(key as keyof typeof Direction)]);
         }
       }
 
@@ -141,7 +141,7 @@ function App() {
               )
             }))
         }
-        const updateToken = () => {
+        const updateToken = (): [number, number] => {
           if (direction.current.length) {
             return getNextPosition(
               direction.current[direction.current.length - 1],
@@ -151,17 +151,15 @@ function App() {
           return position.current;
         }
 
-        var d = Math.random();
-
         const nextState = {
           position: updateToken(),
           bullets: [
             ...updateBullets(),
-            ...(d < 0.1) ? [fireBullet()] : []
+            ...(Math.random() < 0.1) ? [fireBullet()] : []
           ]
         }
 
-        const map = (nextState.bullets.map(bullet => {
+        nextState.bullets.forEach(bullet => {
           const Tx = nextState.position[0];
           const TxMax = Tx + tokenSpan - 1
           const Ty = nextState.position[1]
@@ -172,56 +170,16 @@ function App() {
           const By = bullet.position[1]
           const ByMax = By + bulletSpan - 1
 
-          // const flag = (
-          //   ((Bx >= Tx && Bx <= TxMax) || (BxMax >= Tx && BxMax <= TxMax))
-          //   && ((By >= Ty && By <= TyMax) || (ByMax >= Ty && ByMax <= TyMax))
-          // )
-
-          // if (flag) {
-          //   debugger
-          // }
-
-          return (
+          if (
             ((Bx >= Tx && Bx <= TxMax) || (BxMax >= Tx && BxMax <= TxMax))
             && ((By >= Ty && By <= TyMax) || (ByMax >= Ty && ByMax <= TyMax))
-          )
-
-          // return (
-          //   (bullet.position[0] >= nextState.position[0] && bullet.position[0] <= xMax)
-          //     || (xBulletMax >= nextState.position[0] && xBulletMax <= xMax)
-          //   )
-          //   && (
-          //     (bullet.position[1] >= nextState.position[1] && bullet.position[1] <= yMax)
-          //       || (yBulletMax >= nextState.position[1] && yBulletMax <= yMax)
-          //     )
-        }))
-
-        map.forEach((v, i) => {
-          if (v) {
-            const bullet = nextState.bullets[i]
-            const xMax = nextState.position[0] + tokenSpan - 1
-            const yMax = nextState.position[1] + tokenSpan - 1
-            const xBulletMax = bullet.position[0] + bulletSpan - 1
-            const yBulletMax = bullet.position[1] + bulletSpan - 1
-            console.log({ bullet, token: nextState.position })
-            console.log({ xMax, yMax, yBulletMax, xBulletMax })
-            console.log({})
+          ) {
             clearInterval(intervalId)
             setGameover(true)
-            // alert(JSON.stringify([nextState.bullets, map]))
           }
         })
 
-
-
-        setPosition(prevState => ({
-          ...prevState,
-          position: updateToken(),
-          bullets: [
-            ...updateBullets(),
-            ...(d < 0.1) ? [fireBullet()] : []
-          ]
-        }))
+        setPosition(nextState)
       }, 17)
     }
   }, [])
@@ -230,9 +188,17 @@ function App() {
     <AppContainer>
       {gameover && (<GameOverText>GameOver</GameOverText>)}
       <Board>
-        <Token x={x} y={y} attacking={attacking} />
+        <Token style={{
+          gridColumn: `${attacking ? int(x - 2) : x} / span ${attacking ? 14 : tokenSpan}`,
+          gridRow: `${attacking ? int(y - 2) : y} / span ${attacking ? 14 : tokenSpan}`,
+          backgroundColor: attacking ? "red" : "blue",
+        }} />
         {bullets.current.map(bullet => (
-          <Bullet x={bullet.position[0]} y={bullet.position[1]} attacking={true} />
+          <Bullet style={{
+            gridColumn: `${attacking ? int(bullet.position[0] - 2) : bullet.position[0]} / span ${bulletSpan}`,
+            gridRow: `${attacking ? int(bullet.position[1] - 2) : bullet.position[1]} / span ${bulletSpan}`,
+            backgroundColor: "red",
+          }} />
         ))}
       </Board>
     </AppContainer>
@@ -249,20 +215,14 @@ const GameOverText = styled.h1({
   backgroundColor: "#FFF9"
 })
 
-const Token = styled.div.attrs(({ x, y, attacking }: { x: number, y: number, attacking: boolean }) => ({
-  style: {
-    gridColumn: `${attacking ? int(x - 2) : x} / span ${attacking ? 14 : tokenSpan}`,
-    gridRow: `${attacking ? int(y - 2) : y} / span ${attacking ? 14 : tokenSpan}`,
-    backgroundColor: attacking ? "red" : "blue",
-  }
+// @ts-ignore
+const Token = styled.div.attrs(({ style }) => ({
+  style: style
 }))``
 
-const Bullet = styled.div.attrs(({ x, y, attacking }: { x: number, y: number, attacking: boolean }) => ({
-  style: {
-    gridColumn: `${x} / span ${bulletSpan}`,
-    gridRow: `${y} / span ${bulletSpan}`,
-    backgroundColor: "red",
-  }
+// @ts-ignore
+const Bullet = styled.div.attrs(({ style }) => ({
+  style: style
 }))``
 
 const AppContainer = styled.div({
