@@ -24,6 +24,8 @@ interface State {
 }
 
 const size = 500
+const tokenSpan = 10;
+const bulletSpan = 5;
 
 const randomNum = (max: number) => Math.floor(
   Math.random() * max
@@ -83,20 +85,22 @@ const getNextPosition = (direction: Direction, x: number, y: number, speed: numb
 
 const int = (num: number) => num <= 0 ? 1 : num
 
+let intervalId
 let intervalStarted = false;
 
 function App() {
   const [state, setPosition] = useState<State>({
-    position: [1, 1],
+    position: [250, 250],
     bullets: []
   })
   const [x, y] = state.position
   const direction = useRef([]);
-  const position = useRef([1, 1])
+  const position = useRef([250, 250])
   const bullets = useRef<IBullet[]>([])
   bullets.current = state.bullets
   position.current = [x, y]
   const [attacking, setAttack] = useState(false)
+  const [gameover, setGameover] = useState(false)
 
   useEffect(() => {
     if (!intervalStarted) {
@@ -123,7 +127,7 @@ function App() {
         }))
       }, 1000)
 
-      setInterval(() => {
+      intervalId = setInterval(() => {
         const updateBullets = () => {
           return bullets.current
             .filter(bullet => !bullet.isTerminated(bullet.position))
@@ -149,6 +153,67 @@ function App() {
 
         var d = Math.random();
 
+        const nextState = {
+          position: updateToken(),
+          bullets: [
+            ...updateBullets(),
+            ...(d < 0.1) ? [fireBullet()] : []
+          ]
+        }
+
+        const map = (nextState.bullets.map(bullet => {
+          const Tx = nextState.position[0];
+          const TxMax = Tx + tokenSpan - 1
+          const Ty = nextState.position[1]
+          const TyMax = Ty + tokenSpan - 1
+
+          const Bx = bullet.position[0]
+          const BxMax = Bx + bulletSpan - 1
+          const By = bullet.position[1]
+          const ByMax = By + bulletSpan - 1
+
+          // const flag = (
+          //   ((Bx >= Tx && Bx <= TxMax) || (BxMax >= Tx && BxMax <= TxMax))
+          //   && ((By >= Ty && By <= TyMax) || (ByMax >= Ty && ByMax <= TyMax))
+          // )
+
+          // if (flag) {
+          //   debugger
+          // }
+
+          return (
+            ((Bx >= Tx && Bx <= TxMax) || (BxMax >= Tx && BxMax <= TxMax))
+            && ((By >= Ty && By <= TyMax) || (ByMax >= Ty && ByMax <= TyMax))
+          )
+
+          // return (
+          //   (bullet.position[0] >= nextState.position[0] && bullet.position[0] <= xMax)
+          //     || (xBulletMax >= nextState.position[0] && xBulletMax <= xMax)
+          //   )
+          //   && (
+          //     (bullet.position[1] >= nextState.position[1] && bullet.position[1] <= yMax)
+          //       || (yBulletMax >= nextState.position[1] && yBulletMax <= yMax)
+          //     )
+        }))
+
+        map.forEach((v, i) => {
+          if (v) {
+            const bullet = nextState.bullets[i]
+            const xMax = nextState.position[0] + tokenSpan - 1
+            const yMax = nextState.position[1] + tokenSpan - 1
+            const xBulletMax = bullet.position[0] + bulletSpan - 1
+            const yBulletMax = bullet.position[1] + bulletSpan - 1
+            console.log({ bullet, token: nextState.position })
+            console.log({ xMax, yMax, yBulletMax, xBulletMax })
+            console.log({})
+            clearInterval(intervalId)
+            setGameover(true)
+            // alert(JSON.stringify([nextState.bullets, map]))
+          }
+        })
+
+
+
         setPosition(prevState => ({
           ...prevState,
           position: updateToken(),
@@ -163,6 +228,7 @@ function App() {
 
   return (
     <AppContainer>
+      {gameover && (<GameOverText>GameOver</GameOverText>)}
       <Board>
         <Token x={x} y={y} attacking={attacking} />
         {bullets.current.map(bullet => (
@@ -172,27 +238,32 @@ function App() {
     </AppContainer>
   )
 }
+const GameOverText = styled.h1({
+  position: "fixed",
+  left: "46%",
+  top: "46%",
+  fontSize: "32px",
+  color: "orange",
+  zIndex: 2,
+  padding: "8px",
+  backgroundColor: "#FFF9"
+})
 
 const Token = styled.div.attrs(({ x, y, attacking }: { x: number, y: number, attacking: boolean }) => ({
   style: {
-    gridColumn: `${attacking ? int(x - 2) : x} / span ${attacking ? 14 : 10}`,
-    gridRow: `${attacking ? int(y - 2) : y} / span ${attacking ? 14 : 10}`,
+    gridColumn: `${attacking ? int(x - 2) : x} / span ${attacking ? 14 : tokenSpan}`,
+    gridRow: `${attacking ? int(y - 2) : y} / span ${attacking ? 14 : tokenSpan}`,
     backgroundColor: attacking ? "red" : "blue",
   }
 }))``
 
 const Bullet = styled.div.attrs(({ x, y, attacking }: { x: number, y: number, attacking: boolean }) => ({
   style: {
-    gridColumn: `${x} / span 5`,
-    gridRow: `${y} / span 5`,
+    gridColumn: `${x} / span ${bulletSpan}`,
+    gridRow: `${y} / span ${bulletSpan}`,
     backgroundColor: "red",
   }
 }))``
-// const Component = styled.div.attrs(props => ({
-//   style: {
-//     background: props.background,
-//   },
-// }))`width: 100%;
 
 const AppContainer = styled.div({
   boxSizing: "border-box",
