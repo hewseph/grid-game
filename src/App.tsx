@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
-// @ts-nocheck
 type Position = [number, number]
+
+const start = Date.now()
+let end: number;
 
 enum Direction {
   Still,
@@ -26,6 +28,9 @@ interface State {
 const size = 500
 const tokenSpan = 10;
 const bulletSpan = 5;
+const attackExtra = 2;
+const attackSpanWide = 14;
+const attackSpanLength = 3;
 
 const randomNum = (max: number) => Math.floor(
   Math.random() * max
@@ -62,13 +67,13 @@ const fireBullet = (): IBullet => {
   const direction = RndDirecton()
   return {
     direction,
-    speed: 2,
+    speed: Math.random() < 0.5 ? 3 : Math.random() < 0.5 ? 4 : 2,
     position: getStartPosition(direction),
     isTerminated: terminationFunc[direction] as () => boolean,
   }
 }
 
-const getNextPosition = (direction: Direction, x: number, y: number, speed: number = 1): [number, number] => {
+const getNextPosition = (direction: Direction, [x, y]: [number, number], speed: number = 1): [number, number] => {
   switch (direction) {
     case Direction.ArrowDown:
       return [x, y + speed];
@@ -83,9 +88,28 @@ const getNextPosition = (direction: Direction, x: number, y: number, speed: numb
   }
 }
 
+const getBounds = ([posX, posY]: [number, number], span: number): number[] => {
+  return [posX, posX + span - 1, posY, posY + span - 1]
+}
+
+const getAttackSpace = (position: Position, facing: Direction): Position => {
+  const [l, r, t, b] = getBounds(position, tokenSpan)
+  switch (facing) {
+    case Direction.ArrowDown:
+      return [l - 2, b]
+    case Direction.ArrowLeft:
+      return [l - attackSpanWide, t - 2]
+    case Direction.ArrowRight:
+      return [r, t - 2]
+    case Direction.ArrowUp:
+      return [l - 2, t - 14]
+  }
+  return [-200, -200];
+}
+
 const int = (num: number) => num <= 0 ? 1 : num
 
-let intervalId: number
+let intervalId: any
 let intervalStarted = false;
 
 function App() {
@@ -97,17 +121,27 @@ function App() {
   const direction = useRef<Direction[]>([]);
   const position = useRef<[number, number]>([250, 250])
   const bullets = useRef<IBullet[]>([])
+  const facing = useRef<Direction>(Direction.ArrowDown);
   bullets.current = state.bullets
   position.current = [x, y]
   const [attacking, setAttack] = useState(false)
   const [gameover, setGameover] = useState(false)
+  const [defeated, setDefeated] = useState(0)
+
+  const [Ax, Ay] = getAttackSpace(position.current, facing.current)
+  const attackingRef = useRef<Position>([Ax, Ay])
+  attackingRef.current = attacking ? [Ax, Ay] : [-200, -200];
 
   useEffect(() => {
     if (!intervalStarted) {
       intervalStarted = true
       document.onkeydown = ({ key }: { key: string }) => {
-        if (Direction[(key as keyof typeof Direction)]) {
-          direction.current = [...direction.current, Direction[(key as keyof typeof Direction)]]
+        const dir = Direction[(key as keyof typeof Direction)]
+        if (dir) {
+          if (!direction.current.includes(dir)) {
+            facing.current = dir;
+            direction.current = [...direction.current, dir]
+          }
         }
         if (key == " " || key == "f") {
           setAttack(true);
@@ -115,8 +149,10 @@ function App() {
         }
       };
       document.onkeyup = ({ key }: { key: string }) => {
-        if (Direction[(key as keyof typeof Direction)]) {
-          direction.current = direction.current.filter(d => d != Direction[(key as keyof typeof Direction)]);
+        const dir = Direction[(key as keyof typeof Direction)]
+        if (dir) {
+          direction.current = direction.current.filter(d => d != dir);
+          facing.current = direction.current[direction.current.length - 1] || dir
         }
       }
 
@@ -135,8 +171,7 @@ function App() {
               ...bullet,
               position: getNextPosition(
                 bullet.direction,
-                bullet.position[0],
-                bullet.position[1],
+                bullet.position,
                 bullet.speed
               )
             }))
@@ -145,8 +180,7 @@ function App() {
           if (direction.current.length) {
             return getNextPosition(
               direction.current[direction.current.length - 1],
-              position.current[0],
-              position.current[1])
+              position.current, 2)
           }
           return position.current;
         }
@@ -155,28 +189,31 @@ function App() {
           position: updateToken(),
           bullets: [
             ...updateBullets(),
-            ...(Math.random() < 0.1) ? [fireBullet()] : []
+            ...(Math.random() < 0.18) ? [fireBullet()] : []
           ]
         }
 
-        nextState.bullets.forEach(bullet => {
-          const Tx = nextState.position[0];
-          const TxMax = Tx + tokenSpan - 1
-          const Ty = nextState.position[1]
-          const TyMax = Ty + tokenSpan - 1
+        const isCollision = (pos1: Position, span1: number, pos2: Position, span2: number): boolean => {
+          const [Tx, TxMax, Ty, TyMax] = getBounds(pos1, span1);
+          const [Bx, BxMax, By, ByMax] = getBounds(pos2, span2);
 
-          const Bx = bullet.position[0]
-          const BxMax = Bx + bulletSpan - 1
-          const By = bullet.position[1]
-          const ByMax = By + bulletSpan - 1
-
-          if (
-            ((Bx >= Tx && Bx <= TxMax) || (BxMax >= Tx && BxMax <= TxMax))
+          return ((Bx >= Tx && Bx <= TxMax) || (BxMax >= Tx && BxMax <= TxMax))
             && ((By >= Ty && By <= TyMax) || (ByMax >= Ty && ByMax <= TyMax))
-          ) {
+        }
+
+        nextState.bullets = nextState.bullets.filter(bullet => {
+          console.log(attackingRef.current)
+          if (isCollision(attackingRef.current, attackSpanWide, bullet.position, bulletSpan)) {
+            console.log("HERE")
+            setDefeated(prevState => (prevState + 1))
+            return false
+          }
+          if (isCollision(nextState.position, tokenSpan, bullet.position, bulletSpan)) {
+            end = Date.now();
             clearInterval(intervalId)
             setGameover(true)
           }
+          return true
         })
 
         setPosition(nextState)
@@ -184,14 +221,24 @@ function App() {
     }
   }, [])
 
+
   return (
     <AppContainer>
-      {gameover && (<GameOverText>GameOver</GameOverText>)}
+      {gameover && (<GameOverText>GameOver:<br />{(end - start) / 1000} seconds <br /> Defeated {defeated}</GameOverText>)}
       <Board>
+        {attacking &&
+          <div
+            style={{
+              gridColumn: `${Ax} / span ${attackSpanWide}`,
+              gridRow: `${Ay} / span ${attackSpanWide}`,
+              backgroundColor: "green",
+            }}
+          />
+        }
         <Token style={{
-          gridColumn: `${attacking ? int(x - 2) : x} / span ${attacking ? 14 : tokenSpan}`,
-          gridRow: `${attacking ? int(y - 2) : y} / span ${attacking ? 14 : tokenSpan}`,
-          backgroundColor: attacking ? "red" : "blue",
+          gridColumn: `${x} / span ${tokenSpan}`,
+          gridRow: `${y} / span ${tokenSpan}`,
+          backgroundColor: "blue",
         }} />
         {bullets.current.map(bullet => (
           <Bullet style={{
@@ -215,15 +262,8 @@ const GameOverText = styled.h1({
   backgroundColor: "#FFF9"
 })
 
-// @ts-ignore
-const Token = styled.div.attrs(({ style }) => ({
-  style: style
-}))``
-
-// @ts-ignore
-const Bullet = styled.div.attrs(({ style }) => ({
-  style: style
-}))``
+const Token = styled.div({})
+const Bullet = styled.div({})
 
 const AppContainer = styled.div({
   boxSizing: "border-box",
@@ -240,7 +280,6 @@ const Board = styled.div({
   gridTemplateRows: "repeat(500, 1fr)",
   width: "99vh",
   height: "99vh",
-  transition: "200ms ease-in",
   border: "1px solid black",
   backgroundColor: "lightgray"
 })
